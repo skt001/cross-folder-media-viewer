@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>フォルダ横断メディアビューア</title>
+  <meta name="theme-color" content="#0c0c0d" />
+  <style>
+    :root {
+      --bg: #0c0c0d;
+      --surface: #161617;
+      --surface-hover: #1e1e20;
+      --fg: #f2f1ee;
+      --muted: #9c9a94;
+      --subtle: #6f6d68;
+      --accent: #e8e4d9;
+      --accent-fg: #141412;
+      --border: color-mix(in oklab, var(--fg) 12%, transparent);
+      --shadow-border: 0 0 0 1px color-mix(in oklab, var(--fg) 10%, transparent);
+      --ease: cubic-bezier(0.23, 1, 0.32, 1);
+      --quick: 150ms;
+      --fast: 250ms;
+    }
+    * { box-sizing: border-box; }
+    html {
+      -webkit-font-smoothing: antialiased;
+      min-height: 100%;
+    }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: var(--bg);
+      color: var(--fg);
+      font: 400 16px/1.5 "Segoe UI", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+    }
+    button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+    button:disabled { opacity: 0.4; cursor: default; }
+    img, video {
+      outline: 1px solid color-mix(in oklab, var(--fg) 10%, transparent);
+      outline-offset: -1px;
+    }
+    h1, h2 { text-wrap: balance; }
+    .page { min-height: 100dvh; padding-bottom: 9rem; }
+    .wrap { max-width: 48rem; margin: 0 auto; padding: 0 1rem; }
+    .wrap-wide { max-width: 72rem; margin: 0 auto; padding: 0 1rem; }
+    .kicker {
+      margin: 0 0 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      color: var(--muted);
+    }
+    .title {
+      margin: 0;
+      font-size: clamp(1.75rem, 4vw, 2.25rem);
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+    }
+    .lead {
+      margin: 0.75rem 0 0;
+      max-width: 36rem;
+      color: var(--muted);
+      font-size: 0.9375rem;
+    }
+    header.hero { padding: 3.5rem 0 1.5rem; }
+    .stack { display: flex; flex-direction: column; gap: 1rem; }
+    .frame {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 1.25rem;
+      box-shadow: var(--shadow-border);
+    }
+    .frame-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      min-height: 2.75rem;
+      margin-bottom: 1rem;
+    }
+    .frame-head h2 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .frame-head h2 svg { color: var(--muted); }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-height: 2.75rem;
+      padding: 0 0.75rem;
+      border: 0;
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--fg);
+      box-shadow: var(--shadow-border);
+      font: inherit;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .chip[aria-checked="true"] {
+      background: var(--accent);
+      color: var(--accent-fg);
+    }
+    .chip .mark {
+      width: 1rem;
+      height: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .chip[aria-checked="false"] .mark { box-shadow: var(--shadow-border); }
+    .chip[aria-checked="true"] .mark { background: var(--accent-fg); color: var(--accent); }
+    .chip .count { font-variant-numeric: tabular-nums; font-size: 0.75rem; color: var(--subtle); }
+    .chip[aria-checked="true"] .count { color: inherit; opacity: 0.7; }
+    .ghost, .btn, .btn-sec {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      border: 0;
+      font: inherit;
+      font-weight: 500;
+      transition: opacity var(--quick) var(--ease), background-color var(--quick) var(--ease), transform var(--quick) var(--ease);
+    }
+    .ghost {
+      height: 2.25rem;
+      padding: 0 0.75rem;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+    .ghost:hover { color: var(--fg); background: var(--surface-hover); }
+    .btn, .btn-sec {
+      height: 2.75rem;
+      padding: 0 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+    }
+    .btn { background: var(--accent); color: var(--accent-fg); }
+    .btn:hover:not(:disabled) { opacity: 0.9; }
+    .btn-sec { background: transparent; color: var(--fg); box-shadow: var(--shadow-border); }
+    .btn-sec:hover:not(:disabled) { background: var(--surface-hover); }
+    .btn:active, .btn-sec:active, .ghost:active { transform: scale(0.98); }
+    .filter {
+      width: 100%;
+      height: 2.75rem;
+      margin-bottom: 0.75rem;
+      padding: 0 0.75rem;
+      border: 0;
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--fg);
+      font: inherit;
+      font-size: 0.875rem;
+      box-shadow: var(--shadow-border);
+    }
+    .filter:focus { outline: 2px solid var(--accent); }
+    .filter::placeholder { color: var(--subtle); }
+    .bar {
+      position: fixed;
+      inset: auto 0 0;
+      z-index: 10;
+      padding: 0.75rem 1rem max(0.75rem, env(safe-area-inset-bottom));
+      border-top: 1px solid var(--border);
+      background: color-mix(in oklab, var(--bg) 95%, transparent);
+      backdrop-filter: blur(8px);
+    }
+    .bar-inner {
+      max-width: 48rem;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .count-line { margin: 0; font-size: 0.875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .count-line strong { color: var(--fg); font-weight: 500; }
+    .actions { display: flex; gap: 0.5rem; }
+    .browse-head {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in oklab, var(--bg) 95%, transparent);
+      backdrop-filter: blur(8px);
+    }
+    .browse-row {
+      max-width: 72rem;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .tags { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-height: 2.75rem; }
+    .tag {
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow-border);
+      font-size: 0.875rem;
+    }
+    .tag.accent { background: var(--accent); color: var(--accent-fg); font-weight: 500; }
+    .muted { color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.5rem;
+      padding: 1.25rem 0 2rem;
+    }
+    @media (min-width: 640px) {
+      .grid { grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
+      .wrap, .wrap-wide, .browse-head { padding-left: 1.5rem; padding-right: 1.5rem; }
+    }
+    @media (min-width: 768px) { .grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (min-width: 1024px) { .grid { grid-template-columns: repeat(5, 1fr); } }
+    .thumb {
+      position: relative;
+      display: block;
+      overflow: hidden;
+      border-radius: 8px;
+      background: var(--surface);
+      color: inherit;
+      text-decoration: none;
+    }
+    .thumb:focus-visible { outline: 2px solid var(--accent); }
+    .frame-media { aspect-ratio: 3 / 2; overflow: hidden; }
+    .frame-media img, .frame-media video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform var(--fast) var(--ease);
+    }
+    .thumb:hover img, .thumb:hover video { transform: scale(1.03); }
+    .play {
+      position: absolute;
+      top: 0.5rem;
+      left: 0.5rem;
+      width: 2rem;
+      height: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: color-mix(in oklab, var(--bg) 70%, transparent);
+      color: var(--fg);
+      pointer-events: none;
+    }
+    .play svg { margin-left: 1px; }
+    .caption {
+      position: absolute;
+      inset: auto 0 0;
+      padding: 2rem 0.5rem 0.5rem;
+      background: linear-gradient(to top, color-mix(in oklab, var(--bg) 80%, transparent), transparent);
+      font-size: 0.75rem;
+      color: var(--fg);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--quick) var(--ease);
+      overflow-wrap: anywhere;
+    }
+    .thumb:hover .caption, .thumb:focus-visible .caption { opacity: 1; }
+    .empty, .status {
+      margin: 0;
+      padding: 5rem 1.5rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+    .status strong { display: block; color: var(--fg); font-size: 1rem; font-weight: 500; margin-bottom: 0.5rem; }
+    .hidden { display: none !important; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const IMAGE_EXTS = new Set(["jpg","jpeg","jpe","jfif","png","gif","webp","bmp","avif","svg","ico","heic","heif","tif","tiff"]);
+    const VIDEO_EXTS = new Set(["mp4","webm","mov","m4v","ogv","ogg","mpg","mpeg","mkv","avi","wmv","flv","3gp"]);
+
+    const ICO = {
+      folder: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+      image: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>',
+      film: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 12h18M3 7h4M3 17h4M17 7h4M17 17h4"/></svg>',
+      check: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>',
+      play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+      sliders: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>',
+      rotate: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
+    };
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, "&" + "amp;")
+        .replace(/</g, "&" + "lt;")
+        .replace(/>/g, "&" + "gt;")
+        .replace(/"/g, "&" + "quot;")
+        .replace(/'/g, "&" + "#39;");
+    }
+
+    function classify(ext) {
+      const key = ext.toLowerCase();
+      if (IMAGE_EXTS.has(key)) return { known: true, kind: "image" };
+      if (VIDEO_EXTS.has(key)) return { known: true, kind: "video" };
+      return { known: false, kind: null };
+    }
+
+    function parsePath(raw) {
+      const trimmed = raw.trim().replace(/\\/g, "/");
+      if (!trimmed || trimmed.includes("..") || trimmed.startsWith("/") || trimmed.startsWith("./")) return null;
+      const parts = trimmed.split("/").filter(Boolean);
+      if (!parts.length) return null;
+      const filename = parts[parts.length - 1];
+      const dot = filename.lastIndexOf(".");
+      if (dot <= 0 || dot === filename.length - 1) return null;
+      const ext = filename.slice(dot + 1).toLowerCase();
+      const { known, kind } = classify(ext);
+      return { path: parts.join("/"), folders: parts.slice(0, -1), filename, ext, known, kind };
+    }
+
+    function parseList(text) {
+      const seen = new Set();
+      const items = [];
+      for (const line of text.split(/\r?\n/)) {
+        const item = parsePath(line);
+        if (!item || seen.has(item.path)) continue;
+        seen.add(item.path);
+        items.push(item);
+      }
+      return items.filter((i) => i.known && i.kind);
+    }
+
+    function encodePath(path) {
+      return path.split("/").map(encodeURIComponent).join("/");
+    }
+
+    function matchFiltered(item, folders, exts) {
+      if (!folders.length || !exts.length) return false;
+      if (!folders.every((n) => item.folders.includes(n))) return false;
+      return exts.includes(item.ext);
+    }
+
+    function folderFacets(items) {
+      const counts = new Map();
+      for (const item of items) {
+        for (const name of new Set(item.folders)) counts.set(name, (counts.get(name) || 0) + 1);
+      }
+      return [...counts.entries()]
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ja"));
+    }
+
+    function extFacets(items) {
+      const counts = new Map();
+      for (const item of items) {
+        const prev = counts.get(item.ext);
+        if (prev) prev.count += 1;
+        else counts.set(item.ext, { ext: item.ext, kind: item.kind, count: 1 });
+      }
+      return [...counts.values()].sort((a, b) => a.ext.localeCompare(b.ext, "en"));
+    }
+
+    const state = {
+      status: "loading",
+      items: [],
+      mode: "select",
+      scope: "filtered",
+      folderQuery: "",
+      selectedFolders: [],
+      selectedExts: [],
+    };
+
+    function filtered() {
+      return state.items.filter((i) => matchFiltered(i, state.selectedFolders, state.selectedExts));
+    }
+
+    function chip(checked, label, count, attrs) {
+      return `<button type="button" role="checkbox" aria-checked="${checked ? "true" : "false"}" class="chip" ${attrs}>
+        <span class="mark" aria-hidden="true">${checked ? ICO.check : ""}</span>
+        <span>${esc(label)}</span>
+        ${count !== undefined ? `<span class="count">${count}</span>` : ""}
+      </button>`;
+    }
+
+    function renderSelect() {
+      const folders = folderFacets(state.items);
+      const exts = extFacets(state.items);
+      const images = exts.filter((f) => f.kind === "image");
+      const videos = exts.filter((f) => f.kind === "video");
+      const q = state.folderQuery.trim();
+      const visible = q ? folders.filter((f) => f.name.includes(q)) : folders;
+      const n = filtered().length;
+
+      const folderBlock = folders.length === 0
+        ? `<p class="muted">フォルダ名はありません。update.bat で media.list を作ってください。</p>`
+        : `${folders.length > 8 ? `<input class="filter" type="search" placeholder="フォルダ名を絞り込む" value="${esc(state.folderQuery)}">` : ""}
+           <div class="chips">${visible.map((f) => chip(state.selectedFolders.includes(f.name), f.name, f.count, `data-folder="${esc(f.name)}"`)).join("")}</div>`;
+
+      const kindBlock = (title, icon, list, kind) => list.length ? `
+        <section class="frame">
+          <div class="frame-head">
+            <h2>${icon}${title}</h2>
+            <div>
+              <button type="button" class="ghost" data-kind-all="${kind}">全選択</button>
+              <button type="button" class="ghost" data-kind-none="${kind}">全解除</button>
+            </div>
+          </div>
+          <div class="chips">${list.map((f) => chip(state.selectedExts.includes(f.ext), f.ext.toUpperCase(), f.count, `data-ext="${esc(f.ext)}"`)).join("")}</div>
+        </section>` : "";
+
+      return `<div class="page">
+        <header class="hero wrap">
+          <p class="kicker">CROSS FOLDER VIEWER</p>
+          <h1 class="title">フォルダ横断メディアビューア</h1>
+          <p class="lead">フォルダ名を条件にして、置き場所をまたいで画像と動画を集めます。形式は最初から全部出します。</p>
+        </header>
+        <div class="wrap stack">
+          <section class="frame">
+            <div class="frame-head"><h2>${ICO.folder}フォルダ名</h2></div>
+            ${folderBlock}
+          </section>
+          ${kindBlock("画像", ICO.image, images, "image")}
+          ${kindBlock("動画", ICO.film, videos, "video")}
+          <div style="height:4rem" aria-hidden="true"></div>
+        </div>
+        <footer class="bar">
+          <div class="bar-inner">
+            <p class="count-line">該当 <strong>${n}</strong> 件</p>
+            <div class="actions">
+              <button type="button" class="btn-sec" data-all ${state.items.length ? "" : "disabled"}>全件</button>
+              <button type="button" class="btn" data-show ${n ? "" : "disabled"}>表示</button>
+            </div>
+          </div>
+        </footer>
+      </div>`;
+    }
+
+    function renderBrowse() {
+      const exts = extFacets(state.items);
+      const shown = state.scope === "all" ? state.items : filtered();
+      const tags = state.scope === "all"
+        ? `<span class="tag accent">全件</span>`
+        : `${state.selectedFolders.map((n) => `<span class="tag">${esc(n)}</span>`).join("")}
+           ${state.selectedExts.length !== exts.length ? state.selectedExts.map((e) => `<span class="tag">${esc(e)}</span>`).join("") : ""}`;
+
+      const cells = shown.map((item) => {
+        const href = encodePath(item.path);
+        const media = item.kind === "video"
+          ? `<video src="${href}" muted playsinline preload="metadata"></video>`
+          : `<img src="${href}" alt="${esc(item.filename)}" loading="lazy">`;
+        return `<a class="thumb" href="${href}" target="_blank" rel="noopener noreferrer">
+          <div class="frame-media">${media}</div>
+          ${item.kind === "video" ? `<span class="play">${ICO.play}</span>` : ""}
+          <span class="caption">${esc(item.path)}</span>
+        </a>`;
+      }).join("");
+
+      return `<div>
+        <header class="browse-head">
+          <div class="browse-row">
+            <div class="tags">${tags}<span class="muted">${shown.length} 件</span></div>
+            <div class="actions">
+              <button type="button" class="btn-sec" data-edit>${ICO.sliders}条件変更</button>
+              <button type="button" class="ghost" data-reset>${ICO.rotate}リセット</button>
+            </div>
+          </div>
+        </header>
+        <main class="wrap-wide">
+          ${shown.length ? `<div class="grid">${cells}</div>` : `<p class="empty">該当するファイルはありません</p>`}
+        </main>
+      </div>`;
+    }
+
+    function render() {
+      const app = document.getElementById("app");
+      if (state.status === "error") {
+        app.innerHTML = `<p class="status"><strong>media.list を読み込めませんでした</strong>同じフォルダに media.list があるか、HTTP で開いているか確認してください。</p>`;
+        return;
+      }
+      if (state.status === "loading") {
+        app.innerHTML = `<p class="empty">読み込み中</p>`;
+        return;
+      }
+      app.innerHTML = state.mode === "browse" ? renderBrowse() : renderSelect();
+    }
+
+    function allExtsOf(kind) {
+      return extFacets(state.items).filter((f) => f.kind === kind).map((f) => f.ext);
+    }
+
+    function reset() {
+      state.selectedFolders = [];
+      state.selectedExts = extFacets(state.items).map((f) => f.ext);
+      state.folderQuery = "";
+      state.scope = "filtered";
+      state.mode = "select";
+      render();
+    }
+
+    document.getElementById("app").addEventListener("click", (e) => {
+      const t = e.target.closest("[data-folder],[data-ext],[data-kind-all],[data-kind-none],[data-show],[data-all],[data-edit],[data-reset]");
+      if (!t) return;
+      if (t.dataset.folder) {
+        const name = t.dataset.folder;
+        state.selectedFolders = state.selectedFolders.includes(name)
+          ? state.selectedFolders.filter((n) => n !== name)
+          : [...state.selectedFolders, name];
+        render();
+      } else if (t.dataset.ext) {
+        const ext = t.dataset.ext;
+        state.selectedExts = state.selectedExts.includes(ext)
+          ? state.selectedExts.filter((n) => n !== ext)
+          : [...state.selectedExts, ext];
+        render();
+      } else if (t.dataset.kindAll) {
+        const keys = allExtsOf(t.dataset.kindAll);
+        state.selectedExts = [...new Set([...state.selectedExts, ...keys])];
+        render();
+      } else if (t.dataset.kindNone) {
+        const keys = new Set(allExtsOf(t.dataset.kindNone));
+        state.selectedExts = state.selectedExts.filter((e) => !keys.has(e));
+        render();
+      } else if (t.dataset.show !== undefined) {
+        if (!filtered().length) return;
+        state.scope = "filtered";
+        state.mode = "browse";
+        render();
+        window.scrollTo(0, 0);
+      } else if (t.dataset.all !== undefined) {
+        if (!state.items.length) return;
+        state.scope = "all";
+        state.mode = "browse";
+        render();
+        window.scrollTo(0, 0);
+      } else if (t.dataset.edit !== undefined) {
+        state.mode = "select";
+        render();
+      } else if (t.dataset.reset !== undefined) {
+        reset();
+      }
+    });
+
+    document.getElementById("app").addEventListener("input", (e) => {
+      if (e.target.classList.contains("filter")) {
+        state.folderQuery = e.target.value;
+        const active = document.activeElement === e.target;
+        const pos = e.target.selectionStart;
+        render();
+        if (active) {
+          const next = document.querySelector(".filter");
+          if (next) {
+            next.focus();
+            next.setSelectionRange(pos, pos);
+          }
+        }
+      }
+    });
+
+    fetch("media.list", { cache: "no-store" })
+      .then((r) => {
+        if (!r.ok) throw new Error("missing");
+        return r.text();
+      })
+      .then((text) => {
+        state.items = parseList(text);
+        state.selectedExts = extFacets(state.items).map((f) => f.ext);
+        state.status = "ok";
+        render();
+      })
+      .catch(() => {
+        state.status = "error";
+        render();
+      });
+  </script>
+</body>
+</html>
