@@ -208,10 +208,11 @@
 
       const cells = shown.map((item) => {
         const href = encodePath(item.path);
-        if (item.kind === "video") {
-          return `<li><figure><a href="${href}" target="_blank" rel="noopener noreferrer"><video src="${href}" muted playsinline preload="metadata"></video></a><figcaption>動画</figcaption></figure></li>`;
-        }
-        return `<li><a href="${href}" target="_blank" rel="noopener noreferrer"><img src="${href}" alt="${esc(item.filename)}" loading="lazy"></a></li>`;
+        const cap = `<figcaption><mark>${esc(item.ext)}</mark></figcaption>`;
+        const media = item.kind === "video"
+          ? `<video src="${href}" muted playsinline preload="metadata"></video>`
+          : `<img src="${href}" alt="${esc(item.filename)}" loading="lazy">`;
+        return `<li><figure><a href="${href}" target="_blank" rel="noopener noreferrer">${media}</a>${cap}</figure></li>`;
       }).join("");
 
       return `
