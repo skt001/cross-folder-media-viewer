@@ -280,6 +280,19 @@
       font-size: 0.875rem;
     }
     .status strong { display: block; color: var(--fg); font-size: 1rem; font-weight: 500; margin-bottom: 0.5rem; }
+    .loading {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      padding: 1.5rem;
+      text-align: center;
+    }
+    .loading p { margin: 0; color: var(--muted); }
+    .loading strong { display: block; color: var(--fg); font-weight: 500; margin-bottom: 0.5rem; }
+    .loading progress { width: 12rem; height: 0.5rem; }
     .hidden { display: none !important; }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
@@ -377,9 +390,9 @@
     }
 
     const state = {
-      status: "loading",
+      mode: "loading",
+      loadError: false,
       items: [],
-      mode: "select",
       scope: "filtered",
       folderQuery: "",
       selectedFolders: [],
@@ -487,17 +500,23 @@
       </div>`;
     }
 
+    function renderLoading() {
+      if (state.loadError) {
+        return `<div class="loading">
+          <p><strong>media.list を読み込めませんでした</strong>同じフォルダに media.list があるか、HTTP で開いているか確認してください。</p>
+        </div>`;
+      }
+      return `<div class="loading">
+        <progress></progress>
+        <p>読み込み中</p>
+      </div>`;
+    }
+
     function render() {
       const app = document.getElementById("app");
-      if (state.status === "error") {
-        app.innerHTML = `<p class="status"><strong>media.list を読み込めませんでした</strong>同じフォルダに media.list があるか、HTTP で開いているか確認してください。</p>`;
-        return;
-      }
-      if (state.status === "loading") {
-        app.innerHTML = `<p class="empty">読み込み中</p>`;
-        return;
-      }
-      app.innerHTML = state.mode === "browse" ? renderBrowse() : renderSelect();
+      if (state.mode === "loading") app.innerHTML = renderLoading();
+      else if (state.mode === "browse") app.innerHTML = renderBrowse();
+      else app.innerHTML = renderSelect();
     }
 
     function allExtsOf(kind) {
@@ -514,6 +533,7 @@
     }
 
     document.getElementById("app").addEventListener("click", (e) => {
+      if (state.mode === "loading") return;
       const t = e.target.closest("[data-folder],[data-ext],[data-kind-all],[data-kind-none],[data-show],[data-all],[data-edit],[data-reset]");
       if (!t) return;
       if (t.dataset.folder) {
@@ -557,6 +577,7 @@
     });
 
     document.getElementById("app").addEventListener("input", (e) => {
+      if (state.mode !== "select") return;
       if (e.target.classList.contains("filter")) {
         state.folderQuery = e.target.value;
         const active = document.activeElement === e.target;
@@ -572,21 +593,34 @@
       }
     });
 
-    fetch("media.list", { cache: "no-store" })
-      .then((r) => {
-        if (!r.ok) throw new Error("missing");
-        return r.text();
-      })
-      .then((text) => {
+    function paint() {
+      return new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      });
+    }
+
+    async function boot() {
+      state.mode = "loading";
+      state.loadError = false;
+      render();
+      await paint();
+      try {
+        const res = await fetch("media.list", { cache: "no-store" });
+        if (!res.ok) throw new Error("missing");
+        const text = await res.text();
+        await paint();
         state.items = parseList(text);
         state.selectedExts = extFacets(state.items).map((f) => f.ext);
-        state.status = "ok";
+        state.mode = "select";
         render();
-      })
-      .catch(() => {
-        state.status = "error";
+      } catch {
+        state.loadError = true;
+        state.mode = "loading";
         render();
-      });
+      }
+    }
+
+    boot();
   </script>
 </body>
 </html>
