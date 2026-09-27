@@ -19,6 +19,7 @@
       padding: 0;
       list-style: none;
     }
+    .thumbs figure { margin: 0; }
     .thumbs a { display: block; margin: 0; }
     .thumbs img, .thumbs video {
       width: 100%;
@@ -207,10 +208,10 @@
 
       const cells = shown.map((item) => {
         const href = encodePath(item.path);
-        const media = item.kind === "video"
-          ? `<video src="${href}" muted playsinline preload="metadata"></video>`
-          : `<img src="${href}" alt="${esc(item.filename)}" loading="lazy">`;
-        return `<li><a href="${href}" target="_blank" rel="noopener noreferrer">${media}</a></li>`;
+        if (item.kind === "video") {
+          return `<li><figure><a href="${href}" target="_blank" rel="noopener noreferrer"><video src="${href}" muted playsinline preload="metadata"></video></a><figcaption>動画</figcaption></figure></li>`;
+        }
+        return `<li><a href="${href}" target="_blank" rel="noopener noreferrer"><img src="${href}" alt="${esc(item.filename)}" loading="lazy"></a></li>`;
       }).join("");
 
       return `
