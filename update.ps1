@@ -10,7 +10,7 @@ $patterns = @(
 )
 
 $skipNames = [System.Collections.Generic.HashSet[string]]::new(
-  [string[]]@('index.html','update.bat','update.ps1','media.list','使い方.txt')
+  [string[]]@('index.html','update.bat','update.ps1','media.list','使い方.txt','README.md','simple.min.css')
 )
 
 $files = Get-ChildItem -LiteralPath $root -Recurse -File -Include $patterns |
