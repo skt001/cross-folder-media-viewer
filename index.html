@@ -117,9 +117,13 @@
       return [...counts.values()].sort((a, b) => a.ext.localeCompare(b.ext, "en"));
     }
 
+    const BUILD_CHUNK = 32;
+
     const state = {
       mode: "loading",
       loadError: false,
+      buildDone: 0,
+      buildMax: 0,
       items: [],
       scope: "filtered",
       folderQuery: "",
@@ -142,10 +146,14 @@
           <p><strong>media.list を読み込めませんでした。</strong>同じフォルダに media.list があるか、HTTP で開いているか確認してください。</p>
         </main>`;
       }
+      if (state.buildMax > 0) {
+        return `<main>
+          <h1>フォルダ横断メディアビューア</h1>
+          <progress value="${state.buildDone}" max="${state.buildMax}"></progress>
+        </main>`;
+      }
       return `<main>
         <h1>フォルダ横断メディアビューア</h1>
-        <progress></progress>
-        <p>読み込み中</p>
       </main>`;
     }
 
@@ -233,6 +241,98 @@
       if (state.mode === "loading") app.innerHTML = renderLoading();
       else if (state.mode === "browse") app.innerHTML = renderBrowse();
       else app.innerHTML = renderSelect();
+    }
+
+    let buildToken = 0;
+
+    function setBuildProgress(done, max) {
+      state.buildDone = done;
+      state.buildMax = max;
+      const bar = document.querySelector("#app > main > progress");
+      if (bar) {
+        bar.max = max;
+        bar.value = done;
+        return;
+      }
+      document.getElementById("app").innerHTML = renderLoading();
+    }
+
+    function enterSelect() {
+      const token = ++buildToken;
+      const folders = folderFacets(state.items);
+      const exts = extFacets(state.items);
+      const images = exts.filter((f) => f.kind === "image");
+      const videos = exts.filter((f) => f.kind === "video");
+      const parts = [
+        ...folders.map((f) => ({ fill: "folder", html: check(`data-folder="${esc(f.name)}"`, state.selectedFolders.includes(f.name), f.name, f.count) })),
+        ...images.map((f) => ({ fill: "image", html: check(`data-ext="${esc(f.ext)}"`, state.selectedExts.includes(f.ext), f.ext.toUpperCase(), f.count) })),
+        ...videos.map((f) => ({ fill: "video", html: check(`data-ext="${esc(f.ext)}"`, state.selectedExts.includes(f.ext), f.ext.toUpperCase(), f.count) })),
+      ];
+      const max = Math.max(parts.length, 1);
+      setBuildProgress(0, max);
+
+      const folderFilter = folders.length > 8
+        ? `<p><label>フォルダ名を絞り込む <input type="search" class="filter" value="${esc(state.folderQuery)}"></label></p>`
+        : "";
+      const folderBody = folders.length === 0
+        ? `<p>フォルダ名はありません。update.bat で media.list を作ってください。</p>`
+        : `<p class="choices" data-fill="folder"></p>`;
+      const kindSkel = (title, kind, list) => list.length ? `
+        <fieldset>
+          <legend>${title}</legend>
+          <p>
+            <button type="button" data-kind-all="${kind}">全選択</button>
+            <button type="button" data-kind-none="${kind}">全解除</button>
+          </p>
+          <p class="choices" data-fill="${kind}"></p>
+        </fieldset>` : "";
+      const n = filtered().length;
+      const box = document.createElement("div");
+      box.innerHTML = `
+        <header>
+          <h1>フォルダ横断メディアビューア</h1>
+          <p>フォルダ名を条件にして、置き場所をまたいで画像と動画を集めます。形式は最初から全部出します。</p>
+        </header>
+        <main>
+          <fieldset>
+            <legend>フォルダ名</legend>
+            ${folderFilter}
+            ${folderBody}
+          </fieldset>
+          ${kindSkel("画像", "image", images)}
+          ${kindSkel("動画", "video", videos)}
+        </main>
+        <footer class="actionbar">
+          <p>該当 <output>${n}</output> 件</p>
+          <p>
+            <button type="button" data-all ${state.items.length ? "" : "disabled"}>全件</button>
+            <button type="button" data-show ${n ? "" : "disabled"}>表示</button>
+          </p>
+        </footer>`;
+
+      const bins = {
+        folder: box.querySelector("[data-fill=folder]"),
+        image: box.querySelector("[data-fill=image]"),
+        video: box.querySelector("[data-fill=video]"),
+      };
+      let i = 0;
+      function step() {
+        if (token !== buildToken) return;
+        const end = Math.min(i + BUILD_CHUNK, parts.length);
+        for (; i < end; i++) {
+          const bin = bins[parts[i].fill];
+          if (bin) bin.insertAdjacentHTML("beforeend", parts[i].html);
+        }
+        setBuildProgress(parts.length === 0 ? 1 : i, max);
+        if (i < parts.length) {
+          requestAnimationFrame(step);
+          return;
+        }
+        state.mode = "select";
+        state.buildMax = 0;
+        document.getElementById("app").replaceChildren(...box.childNodes);
+      }
+      requestAnimationFrame(step);
     }
 
     function allExtsOf(kind) {
@@ -334,8 +434,7 @@
         await paint();
         state.items = parseList(text);
         state.selectedExts = extFacets(state.items).map((f) => f.ext);
-        state.mode = "select";
-        render();
+        enterSelect();
       } catch {
         state.loadError = true;
         state.mode = "loading";
