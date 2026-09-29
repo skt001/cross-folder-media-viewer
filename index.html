@@ -5,40 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>フォルダ横断メディアビューア</title>
   <link rel="stylesheet" href="simple.min.css" />
-  <style>
-    .choices {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.4rem 1.25rem;
-    }
-    .choices label { display: inline-flex; align-items: baseline; gap: 0.4rem; }
-    .thumbs {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-      gap: 0.5rem;
-      padding: 0;
-      list-style: none;
-    }
-    .thumbs figure { margin: 0; }
-    .thumbs a { display: block; margin: 0; }
-    .thumbs img, .thumbs video {
-      width: 100%;
-      aspect-ratio: 3 / 2;
-      object-fit: cover;
-    }
-    .actionbar {
-      position: sticky;
-      bottom: 0;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.75rem 0 calc(0.75rem + env(safe-area-inset-bottom));
-      background: var(--bg);
-    }
-    .tags { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
-  </style>
 </head>
 <body>
   <div id="app"></div>
@@ -167,11 +133,11 @@
       const n = filtered().length;
 
       const folderFilter = folders.length > 8
-        ? `<p><label>フォルダ名を絞り込む <input type="search" class="filter" value="${esc(state.folderQuery)}"></label></p>`
+        ? `<p><label>フォルダ名を絞り込む <input type="search" value="${esc(state.folderQuery)}"></label></p>`
         : "";
       const folderChoices = folders.length === 0
         ? `<p>フォルダ名はありません。update.bat で media.list を作ってください。</p>`
-        : `<p class="choices">${visible.map((f) => check(`data-folder="${esc(f.name)}"`, state.selectedFolders.includes(f.name), f.name, f.count)).join("")}</p>`;
+        : `<p>${visible.map((f) => check(`data-folder="${esc(f.name)}"`, state.selectedFolders.includes(f.name), f.name, f.count)).join("")}</p>`;
 
       const kindBlock = (title, list, kind) => list.length ? `
         <fieldset>
@@ -180,7 +146,7 @@
             <button type="button" data-kind-all="${kind}">全選択</button>
             <button type="button" data-kind-none="${kind}">全解除</button>
           </p>
-          <p class="choices">${list.map((f) => check(`data-ext="${esc(f.ext)}"`, state.selectedExts.includes(f.ext), f.ext.toUpperCase(), f.count)).join("")}</p>
+          <p>${list.map((f) => check(`data-ext="${esc(f.ext)}"`, state.selectedExts.includes(f.ext), f.ext.toUpperCase(), f.count)).join("")}</p>
         </fieldset>` : "";
 
       return `
@@ -197,7 +163,7 @@
           ${kindBlock("画像", images, "image")}
           ${kindBlock("動画", videos, "video")}
         </main>
-        <footer class="actionbar">
+        <footer>
           <p>該当 <output>${n}</output> 件</p>
           <p>
             <button type="button" data-all ${state.items.length ? "" : "disabled"}>全件</button>
@@ -225,14 +191,14 @@
 
       return `
         <header>
-          <p class="tags">${tags} <small>${shown.length} 件</small></p>
+          <p>${tags} <small>${shown.length} 件</small></p>
           <p>
             <button type="button" data-edit>条件変更</button>
             <button type="button" data-reset>リセット</button>
           </p>
         </header>
         <main>
-          ${shown.length ? `<ul class="thumbs">${cells}</ul>` : `<p>該当するファイルはありません。</p>`}
+          ${shown.length ? `<ul>${cells}</ul>` : `<p>該当するファイルはありません。</p>`}
         </main>`;
     }
 
@@ -272,11 +238,11 @@
       setBuildProgress(0, max);
 
       const folderFilter = folders.length > 8
-        ? `<p><label>フォルダ名を絞り込む <input type="search" class="filter" value="${esc(state.folderQuery)}"></label></p>`
+        ? `<p><label>フォルダ名を絞り込む <input type="search" value="${esc(state.folderQuery)}"></label></p>`
         : "";
       const folderBody = folders.length === 0
         ? `<p>フォルダ名はありません。update.bat で media.list を作ってください。</p>`
-        : `<p class="choices" data-fill="folder"></p>`;
+        : `<p data-fill="folder"></p>`;
       const kindSkel = (title, kind, list) => list.length ? `
         <fieldset>
           <legend>${title}</legend>
@@ -284,7 +250,7 @@
             <button type="button" data-kind-all="${kind}">全選択</button>
             <button type="button" data-kind-none="${kind}">全解除</button>
           </p>
-          <p class="choices" data-fill="${kind}"></p>
+          <p data-fill="${kind}"></p>
         </fieldset>` : "";
       const n = filtered().length;
       const box = document.createElement("div");
@@ -302,7 +268,7 @@
           ${kindSkel("画像", "image", images)}
           ${kindSkel("動画", "video", videos)}
         </main>
-        <footer class="actionbar">
+        <footer>
           <p>該当 <output>${n}</output> 件</p>
           <p>
             <button type="button" data-all ${state.items.length ? "" : "disabled"}>全件</button>
@@ -401,13 +367,13 @@
 
     document.getElementById("app").addEventListener("input", (e) => {
       if (state.mode !== "select") return;
-      if (e.target.classList.contains("filter")) {
+      if (e.target instanceof HTMLInputElement && e.target.type === "search") {
         state.folderQuery = e.target.value;
         const active = document.activeElement === e.target;
         const pos = e.target.selectionStart;
         render();
         if (active) {
-          const next = document.querySelector(".filter");
+          const next = document.querySelector("#app input[type=search]");
           if (next) {
             next.focus();
             next.setSelectionRange(pos, pos);
