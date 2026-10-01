@@ -73,6 +73,7 @@
     // State: the item array plus a few toggles.
     const state = {
       items: null, // null: loading, []: empty data or error, [...]: data loaded
+      error: null, // set when media.json could not be fetched or parsed
       showImages: true,
       showVideos: true,
       hiddenExts: new Set(), // extensions to hide (e.g. the browser can't render them)
@@ -128,6 +129,9 @@
             : `<img src="${href}" alt="${esc(item.filename)}" loading="lazy">`;
           return `<figure><a href="${href}" target="_blank" rel="noopener noreferrer">${media}</a>${cap}</figure>`;
         }).join("");
+      } else if (state.error) {
+        bodyContent = `<p><strong>Could not load media.json: ${esc(state.error)}</strong></p>
+          <p><small>Check that media.json exists next to view.html, and that you're viewing this page over http(s) rather than file://.</small></p>`;
       } else {
         bodyContent = `<p>No matching files.</p>`;
       }
@@ -195,13 +199,15 @@
 
     async function boot() {
       state.items = null;
+      state.error = null;
       render();
       try {
         const res = await fetch("media.json", { cache: "no-store" });
-        if (!res.ok) throw new Error("missing");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         state.items = parseIndex(await res.json());
-      } catch {
+      } catch (err) {
         state.items = [];
+        state.error = err instanceof Error ? err.message : String(err);
       }
       render();
     }
