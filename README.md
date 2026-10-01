@@ -7,7 +7,9 @@ A static web viewer for browsing images and videos kept across multiple folders,
 ## How it works
 
 1. Place the files from this repository in the folder that holds your images and videos.
-2. Double-click `update.bat` to build `media.json`, an index of every image/video found (dotfiles and dot-folders are skipped). Re-run it whenever files are added or removed.
+2. Build `media.json`, an index of every image/video found (dotfiles and dot-folders are skipped). Re-run this whenever files are added or removed:
+   - Windows: double-click `update.bat` (runs `update.ps1`).
+   - Mac/Linux: run `update.sh` (runs `update.py`; requires Python 3).
 3. Serve that folder over HTTP (e.g. a NAS's static web server).
 4. Open `view.html` in a browser.
 
@@ -18,17 +20,19 @@ Most browsers can't read `media.json` over `file://`; open the folder over HTTP 
 - Recursively indexes images and videos under the folder.
 - Filter by type (image/video), by folder, and by file extension (every extension starts checked; uncheck one to hide files your browser can't render).
 - Galleries over 300 items show a warning instead of rendering by default; a button lets you force-show them anyway.
-- `update.bat` keeps its window open (pause on exit) and writes its output to `update.log`.
+- The entry point script keeps its window open (pause on exit) and writes its output to `update.log`.
 
 ## Files
 
 | File | Role |
 |---|---|
 | `view.html` | The viewer: markup and logic |
-| `update.bat` | Entry point; runs `update.ps1` and pauses so you can read the output |
-| `update.ps1` | Builds `media.json` |
-| `media.json` | Generated index (path, kind, extension); created by `update.bat`, not included in this repository |
-| `update.log` | Generated log from the last `update.bat` run |
+| `update.bat` | Windows entry point; runs `update.ps1` and pauses so you can read the output |
+| `update.ps1` | Builds `media.json` on Windows |
+| `update.sh` | Mac/Linux entry point; runs `update.py` and pauses so you can read the output |
+| `update.py` | Builds `media.json` on Mac/Linux (requires Python 3) |
+| `media.json` | Generated index (path, kind, extension); created by the entry point script, not included in this repository |
+| `update.log` | Generated log from the last entry point script run |
 | `simple.min.css` | Styling; not included, see below |
 
 ## Getting Simple.css
