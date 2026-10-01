@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>フォルダ横断メディアビューア</title>
+  <link rel="stylesheet" href="simple.min.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const MAX_DISPLAY_THRESHOLD = 300; // 一覧を表示する上限件数
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, "&" + "amp;")
+        .replace(/</g, "&" + "lt;")
+        .replace(/>/g, "&" + "gt;")
+        .replace(/"/g, "&" + "quot;")
+        .replace(/'/g, "&" + "#39;");
+    }
+
+    // 一覧(media.json)は [{ "path": 実体のままの相対パス, "kind": "image" | "video", "ext": 拡張子 }] の配列。
+    // viewer は一覧に合わせて HTML を作るだけで、実ファイルの存否は見ない。
+    function toItem(entry) {
+      if (!entry || typeof entry.path !== "string") return null;
+      if (entry.kind !== "image" && entry.kind !== "video") return null;
+      const parts = entry.path.split("/");
+      if (parts.some((p) => p === "" || p === "." || p === "..")) return null; // 相対パスのみ
+      const filename = parts[parts.length - 1];
+      let ext = typeof entry.ext === "string" ? entry.ext : "";
+      if (!ext) {
+        const dot = filename.lastIndexOf(".");
+        ext = dot > 0 && dot < filename.length - 1 ? filename.slice(dot + 1).toLowerCase() : "";
+      }
+      return { path: entry.path, folders: parts.slice(0, -1), filename, ext, kind: entry.kind };
+    }
+
+    function parseIndex(data) {
+      if (!Array.isArray(data)) return [];
+      const seen = new Set();
+      const items = [];
+      for (const entry of data) {
+        const item = toItem(entry);
+        if (!item || seen.has(item.path)) continue;
+        seen.add(item.path);
+        items.push(item);
+      }
+      return items;
+    }
+
+    function encodePath(path) {
+      return path
+        .split('/')
+        .map(encodeURIComponent)
+        .join('/');
+    }
+
+    function folderFacets(items) {
+      const names = new Set();
+      for (const item of items) {
+        for (const name of item.folders) names.add(name);
+      }
+      return [...names].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    }
+
+    function extFacets(items) {
+      const exts = new Set();
+      for (const item of items) exts.add(item.ext);
+      return [...exts].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    }
+
+    // 状態はデータ配列とトグルのみ（モードフラグ全廃）
+    const state = {
+      items: null, // null: 読み込み中, []: 空データ/エラー, [...] データあり
+      showImages: true,
+      showVideos: true,
+      hiddenExts: new Set(), // ブラウザ側の問題等で表示したくない拡張子
+      forceShow: false // 300件超でも強制的にギャラリーを描画する
+    };
+
+    // 画像/動画トグルとフォルダ絞り込みまでを適用した集合（拡張子チェックボックスの候補元）
+    function typeFilteredItems() {
+      if (!state.items) return [];
+      return state.items.filter((item) => {
+        if (!state.showImages && item.kind === "image") return false;
+        if (!state.showVideos && item.kind === "video") return false;
+        return true;
+      });
+    }
+
+    function filteredItems() {
+      return typeFilteredItems().filter((item) => !state.hiddenExts.has(item.ext));
+    }
+
+    function render() {
+      const app = document.getElementById("app");
+
+      if (state.items === null) {
+        app.innerHTML = `<main><p>Loading...</p></main>`;
+        return;
+      }
+
+      const shown = filteredItems();
+      const folders = folderFacets(shown);
+      const exts = extFacets(typeFilteredItems());
+
+      const folderButtons = folders.map((f) => 
+        `<button type="button" data-filter-folder="${esc(f)}">${esc(f)}</button>`
+      ).join(" ");
+
+      const extCheckboxes = exts.map((ext) =>
+        `<label><input type="checkbox" data-ext-toggle="${esc(ext)}" ${state.hiddenExts.has(ext) ? "" : "checked"}> ${esc(ext)}</label>`
+      ).join(" ");
+
+      // 件数判定によるコンテンツ制御（300件超なら警告のみ、強制表示ボタンで解除可能）
+      let bodyContent = "";
+      if (shown.length > MAX_DISPLAY_THRESHOLD && !state.forceShow) {
+        bodyContent = `<p><strong>対象が多すぎます（${shown.length} 件）。フォルダを選択して絞り込んでください。</strong></p>
+          <p><button type="button" data-force-show>件数が多くても表示する（${shown.length} 件、重くなる場合があります）</button></p>`;
+      } else if (shown.length > 0) {
+        bodyContent = shown.map((item) => {
+          const href = encodePath(item.path);
+          const kindLabel = item.kind === "video" ? "動画" : "画像";
+          const cap = `<figcaption><mark>${esc(kindLabel)}</mark><mark>${esc(item.ext)}</mark><mark>${esc(item.path)}</mark></figcaption>`;
+          const media = item.kind === "video"
+            ? `<video src="${href}#t=1" muted playsinline></video>`
+            : `<img src="${href}" alt="${esc(item.filename)}" loading="lazy">`;
+          return `<figure><a href="${href}" target="_blank" rel="noopener noreferrer">${media}</a>${cap}</figure>`;
+        }).join("");
+      } else {
+        bodyContent = `<p>該当するファイルはありません。</p>`;
+      }
+
+      app.innerHTML = `
+        <header>
+          <h1>フォルダ横断メディアビューア (${shown.length} 件)</h1>
+          <div>
+            <label><input type="checkbox" data-type-toggle="image" ${state.showImages ? "checked" : ""}> 画像</label>
+            <label><input type="checkbox" data-type-toggle="video" ${state.showVideos ? "checked" : ""}> 動画</label>
+            <button type="button" data-reset>リセット</button>
+          </div>
+          <hr>
+          <div>
+            ${folderButtons.length ? folderButtons : "<small>これ以上絞り込めるフォルダはありません</small>"}
+          </div>
+          <div>
+            ${extCheckboxes.length ? extCheckboxes : "<small>対象の拡張子はありません</small>"}
+          </div>
+        </header>
+        <main>
+          ${bodyContent}
+        </main>`;
+    }
+
+    document.getElementById("app").addEventListener("click", (e) => {
+      const folderBtn = e.target.closest("[data-filter-folder]");
+      if (folderBtn) {
+        const targetFolder = folderBtn.dataset.filterFolder;
+        // サブセットで state.items を上書き更新するだけ
+        state.items = state.items.filter((item) => item.folders.includes(targetFolder));
+        render();
+        window.scrollTo(0, 0);
+        return;
+      }
+
+      const resetBtn = e.target.closest("[data-reset]");
+      if (resetBtn) {
+        boot();
+        return;
+      }
+
+      const forceShowBtn = e.target.closest("[data-force-show]");
+      if (forceShowBtn) {
+        state.forceShow = true;
+        render();
+      }
+    });
+
+    document.getElementById("app").addEventListener("change", (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement) || t.type !== "checkbox") return;
+      if (t.dataset.typeToggle === "image") {
+        state.showImages = t.checked;
+        render();
+      } else if (t.dataset.typeToggle === "video") {
+        state.showVideos = t.checked;
+        render();
+      } else if (t.dataset.extToggle) {
+        if (t.checked) state.hiddenExts.delete(t.dataset.extToggle);
+        else state.hiddenExts.add(t.dataset.extToggle);
+        render();
+      }
+    });
+
+    async function boot() {
+      state.items = null;
+      render();
+      try {
+        const res = await fetch("media.json", { cache: "no-store" });
+        if (!res.ok) throw new Error("missing");
+        state.items = parseIndex(await res.json());
+      } catch {
+        state.items = [];
+      }
+      render();
+    }
+
+    boot();
+  </script>
+</body>
+</html>
