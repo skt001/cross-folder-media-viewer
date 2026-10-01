@@ -125,7 +125,7 @@
       } else if (shown.length > 0) {
         bodyContent = shown.map((item) => {
           const href = encodePath(item.path);
-          const kindLabel = item.kind === "video" ? "Video" : "Image";
+          const kindLabel = item.kind === "video" ? "Movie" : "Photo";
           const cap = `<figcaption><mark>${esc(kindLabel)}</mark><mark>${esc(item.ext)}</mark><mark>${esc(item.path)}</mark></figcaption>`;
           const media = item.kind === "video"
             ? `<video src="${href}#t=1" muted playsinline></video>`
@@ -143,8 +143,8 @@
         <header>
           <h1>Cross-Folder Media Viewer (${shown.length} items)</h1>
           <div>
-            <label><input type="checkbox" data-type-toggle="image" ${state.showImages ? "checked" : ""}> Image</label>
-            <label><input type="checkbox" data-type-toggle="video" ${state.showVideos ? "checked" : ""}> Video</label>
+            <label><input type="checkbox" data-type-toggle="image" ${state.showImages ? "checked" : ""}> Photo</label>
+            <label><input type="checkbox" data-type-toggle="video" ${state.showVideos ? "checked" : ""}> Movie</label>
             <button type="button" data-reset>Reset</button>
           </div>
           <hr>

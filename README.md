@@ -1,13 +1,13 @@
 # Cross-Folder Media Viewer
 
-A static web viewer for browsing images and videos kept across multiple folders, filterable by folder name. Styling is handled by [Simple.css](https://simplecss.org/) and follows the OS light/dark setting.
+A static web viewer for browsing photos and movies kept across multiple folders, filterable by folder name. Styling is handled by [Simple.css](https://simplecss.org/) and follows the OS light/dark setting.
 
 [日本語版はこちら](README.ja.md)
 
 ## How it works
 
-1. Place the files from this repository in the folder that holds your images and videos.
-2. Build `media.json`, an index of every image/video found (dotfiles and dot-folders are skipped). Re-run this whenever files are added or removed:
+1. Place the files from this repository in the folder that holds your photos and movies.
+2. Build `media.json`, an index of every photo/movie found (dotfiles and dot-folders are skipped). Re-run this whenever files are added or removed:
    - Windows: double-click `update.bat` (runs `update.ps1`).
    - Mac/Linux: run `update.sh` (runs `update.py`; requires Python 3).
 3. Serve that folder over HTTP (e.g. a NAS's static web server).
@@ -17,8 +17,8 @@ Most browsers can't read `media.json` over `file://`; open the folder over HTTP 
 
 ## Features
 
-- Recursively indexes images and videos under the folder.
-- Filter by type (image/video), by folder, and by file extension (every extension starts checked; uncheck one to hide files your browser can't render).
+- Recursively indexes photos and movies under the folder.
+- Filter by type (photo/movie), by folder, and by file extension (every extension starts checked; uncheck one to hide files your browser can't render).
 - Galleries over 300 items show a warning instead of rendering by default; a button lets you force-show them anyway.
 - The entry point script keeps its window open (pause on exit) and writes its output to `update.log`.
 
