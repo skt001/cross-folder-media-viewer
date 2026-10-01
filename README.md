@@ -1,22 +1,44 @@
-# フォルダ横断メディアビューア
+# Cross-Folder Media Viewer
 
-フォルダ名を条件にして、置き場所をまたいで画像と動画を閲覧する静的 Web ビューアです。見た目は [Simple.css](https://simplecss.org/) に任せ、OS のライト／ダークに従います。
+A static web viewer for browsing images and videos kept across multiple folders, filterable by folder name. Styling is handled by [Simple.css](https://simplecss.org/) and follows the OS light/dark setting.
 
-## 使い方
+[日本語版はこちら](README.ja.md)
 
-1. このリポジトリのファイルを、画像・動画があるフォルダに置く
-2. `update.bat` をダブルクリックして `media.list` を作る（ファイルを足したら再実行）
-3. そのフォルダを NAS などの静的 Web で公開する
-4. ブラウザで `index.html` を開く
+## How it works
 
-`file://` では `media.list` を読めないことがあります。HTTP で開いてください。
+1. Place the files from this repository in the folder that holds your images and videos.
+2. Double-click `update.bat` to build `media.json`, an index of every image/video found (dotfiles and dot-folders are skipped). Re-run it whenever files are added or removed.
+3. Serve that folder over HTTP (e.g. a NAS's static web server).
+4. Open `view.html` in a browser.
 
-## ファイル
+Most browsers can't read `media.json` over `file://`; open the folder over HTTP instead.
 
-| ファイル | 役割 |
+## Features
+
+- Recursively indexes images and videos under the folder.
+- Filter by type (image/video), by folder, and by file extension (every extension starts checked; uncheck one to hide files your browser can't render).
+- Galleries over 300 items show a warning instead of rendering by default; a button lets you force-show them anyway.
+- `update.bat` keeps its window open (pause on exit) and writes its output to `update.log`.
+
+## Files
+
+| File | Role |
 |---|---|
-| `index.html` | 意味の HTML と動作 |
-| `simple.min.css` | 見た目（同梱） |
-| `update.bat` | 入口。`update.ps1` を呼ぶ |
-| `update.ps1` | `media.list` を生成 |
-| `media.list` | ルートからの相対パス一覧（空。bat で埋める） |
+| `view.html` | The viewer: markup and logic |
+| `update.bat` | Entry point; runs `update.ps1` and pauses so you can read the output |
+| `update.ps1` | Builds `media.json` |
+| `media.json` | Generated index (path, kind, extension); created by `update.bat`, not included in this repository |
+| `update.log` | Generated log from the last `update.bat` run |
+| `simple.min.css` | Styling; not included, see below |
+
+## Getting Simple.css
+
+`view.html` expects a `simple.min.css` file next to it, but it is not included in this repository. Either:
+
+- Download it from the [Simple.css repository](https://github.com/kevquirk/simple.css) and place it next to `view.html`, or
+- Change the `<link>` tag in `view.html` to point at the CDN instead: `https://cdn.simplecss.org/simple.min.css`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+

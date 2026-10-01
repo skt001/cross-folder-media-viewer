@@ -1,15 +1,15 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>フォルダ横断メディアビューア</title>
+  <title>Cross-Folder Media Viewer</title>
   <link rel="stylesheet" href="simple.min.css" />
 </head>
 <body>
   <div id="app"></div>
   <script>
-    const MAX_DISPLAY_THRESHOLD = 300; // 一覧を表示する上限件数
+    const MAX_DISPLAY_THRESHOLD = 300; // max item count to render as a gallery
 
     function esc(s) {
       return String(s)
@@ -20,13 +20,13 @@
         .replace(/'/g, "&" + "#39;");
     }
 
-    // 一覧(media.json)は [{ "path": 実体のままの相対パス, "kind": "image" | "video", "ext": 拡張子 }] の配列。
-    // viewer は一覧に合わせて HTML を作るだけで、実ファイルの存否は見ない。
+    // The index (media.json) is an array of { "path": relative path as-is, "kind": "image" | "video", "ext": extension }.
+    // The viewer only builds HTML from the index; it never checks whether the file actually exists.
     function toItem(entry) {
       if (!entry || typeof entry.path !== "string") return null;
       if (entry.kind !== "image" && entry.kind !== "video") return null;
       const parts = entry.path.split("/");
-      if (parts.some((p) => p === "" || p === "." || p === "..")) return null; // 相対パスのみ
+      if (parts.some((p) => p === "" || p === "." || p === "..")) return null; // relative paths only
       const filename = parts[parts.length - 1];
       let ext = typeof entry.ext === "string" ? entry.ext : "";
       if (!ext) {
@@ -70,16 +70,16 @@
       return [...exts].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     }
 
-    // 状態はデータ配列とトグルのみ（モードフラグ全廃）
+    // State: the item array plus a few toggles.
     const state = {
-      items: null, // null: 読み込み中, []: 空データ/エラー, [...] データあり
+      items: null, // null: loading, []: empty data or error, [...]: data loaded
       showImages: true,
       showVideos: true,
-      hiddenExts: new Set(), // ブラウザ側の問題等で表示したくない拡張子
-      forceShow: false // 300件超でも強制的にギャラリーを描画する
+      hiddenExts: new Set(), // extensions to hide (e.g. the browser can't render them)
+      forceShow: false // render the gallery even past the 300-item threshold
     };
 
-    // 画像/動画トグルとフォルダ絞り込みまでを適用した集合（拡張子チェックボックスの候補元）
+    // Items after applying the image/video toggle and folder filtering (candidates for the extension checkboxes)
     function typeFilteredItems() {
       if (!state.items) return [];
       return state.items.filter((item) => {
@@ -113,15 +113,15 @@
         `<label><input type="checkbox" data-ext-toggle="${esc(ext)}" ${state.hiddenExts.has(ext) ? "" : "checked"}> ${esc(ext)}</label>`
       ).join(" ");
 
-      // 件数判定によるコンテンツ制御（300件超なら警告のみ、強制表示ボタンで解除可能）
+      // Gate content on the count: past the threshold, show only a warning and a force-show button.
       let bodyContent = "";
       if (shown.length > MAX_DISPLAY_THRESHOLD && !state.forceShow) {
-        bodyContent = `<p><strong>対象が多すぎます（${shown.length} 件）。フォルダを選択して絞り込んでください。</strong></p>
-          <p><button type="button" data-force-show>件数が多くても表示する（${shown.length} 件、重くなる場合があります）</button></p>`;
+        bodyContent = `<p><strong>Too many items (${shown.length}). Select a folder to narrow it down.</strong></p>
+          <p><button type="button" data-force-show>Show anyway (${shown.length} items; this may be slow)</button></p>`;
       } else if (shown.length > 0) {
         bodyContent = shown.map((item) => {
           const href = encodePath(item.path);
-          const kindLabel = item.kind === "video" ? "動画" : "画像";
+          const kindLabel = item.kind === "video" ? "Video" : "Image";
           const cap = `<figcaption><mark>${esc(kindLabel)}</mark><mark>${esc(item.ext)}</mark><mark>${esc(item.path)}</mark></figcaption>`;
           const media = item.kind === "video"
             ? `<video src="${href}#t=1" muted playsinline></video>`
@@ -129,23 +129,23 @@
           return `<figure><a href="${href}" target="_blank" rel="noopener noreferrer">${media}</a>${cap}</figure>`;
         }).join("");
       } else {
-        bodyContent = `<p>該当するファイルはありません。</p>`;
+        bodyContent = `<p>No matching files.</p>`;
       }
 
       app.innerHTML = `
         <header>
-          <h1>フォルダ横断メディアビューア (${shown.length} 件)</h1>
+          <h1>Cross-Folder Media Viewer (${shown.length} items)</h1>
           <div>
-            <label><input type="checkbox" data-type-toggle="image" ${state.showImages ? "checked" : ""}> 画像</label>
-            <label><input type="checkbox" data-type-toggle="video" ${state.showVideos ? "checked" : ""}> 動画</label>
-            <button type="button" data-reset>リセット</button>
+            <label><input type="checkbox" data-type-toggle="image" ${state.showImages ? "checked" : ""}> Image</label>
+            <label><input type="checkbox" data-type-toggle="video" ${state.showVideos ? "checked" : ""}> Video</label>
+            <button type="button" data-reset>Reset</button>
           </div>
           <hr>
           <div>
-            ${folderButtons.length ? folderButtons : "<small>これ以上絞り込めるフォルダはありません</small>"}
+            ${folderButtons.length ? folderButtons : "<small>No more folders to filter by</small>"}
           </div>
           <div>
-            ${extCheckboxes.length ? extCheckboxes : "<small>対象の拡張子はありません</small>"}
+            ${extCheckboxes.length ? extCheckboxes : "<small>No extensions to show</small>"}
           </div>
         </header>
         <main>
@@ -157,7 +157,7 @@
       const folderBtn = e.target.closest("[data-filter-folder]");
       if (folderBtn) {
         const targetFolder = folderBtn.dataset.filterFolder;
-        // サブセットで state.items を上書き更新するだけ
+        // Narrow state.items down to this folder's subset.
         state.items = state.items.filter((item) => item.folders.includes(targetFolder));
         render();
         window.scrollTo(0, 0);
