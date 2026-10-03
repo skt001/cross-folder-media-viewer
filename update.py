@@ -5,6 +5,7 @@
 import json
 import os
 import sys
+import time
 
 IMAGE_EXTS = (
     "jpg jpeg jpe jfif jif jfi pjpeg pjp png apng gif webp bmp dib avif avifs svg svgz ico cur "
@@ -23,6 +24,7 @@ KIND_OF.update({e: "video" for e in VIDEO_EXTS})
 
 
 def main():
+    t0 = time.perf_counter()
     root = os.path.dirname(os.path.abspath(__file__))
     out_path = os.path.join(root, "media.json")
     log_path = os.path.join(root, "update.log")
@@ -33,19 +35,22 @@ def main():
         log_lines.append(msg)
 
     items = []
-    skipped = []
+    n_dot_folders = 0
+    skipped_links = []
+    skipped_unreadable = []
 
     def on_walk_error(err):
-        skipped.append(getattr(err, "filename", str(err)))
+        skipped_unreadable.append(getattr(err, "filename", str(err)))
 
     for dirpath, dirnames, filenames in os.walk(root, onerror=on_walk_error, followlinks=False):
         kept = []
         for d in sorted(dirnames):
             full = os.path.join(dirpath, d)
             if d.startswith("."):
+                n_dot_folders += 1
                 continue  # dot-folders are hidden by convention; not walked
             if os.path.islink(full):
-                skipped.append(full)  # links are not followed, to avoid loops
+                skipped_links.append(full)  # links are not followed, to avoid loops
                 continue
             kept.append(d)
         dirnames[:] = kept
@@ -79,11 +84,17 @@ def main():
 
     n_img = sum(1 for i in items if i["kind"] == "image")
     n_vid = sum(1 for i in items if i["kind"] == "video")
-    log("media.json updated: {0} items (images {1}, videos {2})".format(len(items), n_img, n_vid))
-    if skipped:
-        log("Skipped {0} folder(s) (unreadable, or a link that is not followed):".format(len(skipped)))
-        for s in skipped:
-            log("  " + s)
+    elapsed = time.perf_counter() - t0
+    log("media.json updated: {0} items (images {1}, videos {2}) in {3:.2f}s".format(
+        len(items), n_img, n_vid, elapsed))
+
+    if n_dot_folders or skipped_links or skipped_unreadable:
+        log("Skipped: dot-folders {0}, links {1}, unreadable {2}".format(
+            n_dot_folders, len(skipped_links), len(skipped_unreadable)))
+        for s in skipped_links:
+            log("  link: " + s)
+        for s in skipped_unreadable:
+            log("  unreadable: " + s)
 
     write_log(log_path, log_lines)
 

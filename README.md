@@ -18,7 +18,9 @@ Most browsers can't read `media.json` over `file://`; open the folder over HTTP 
 ## Features
 
 - Recursively indexes photos and movies under the folder.
-- Filter by type (photo/movie), by folder, and by file extension (every extension starts checked; uncheck one to hide files your browser can't render).
+- Filter by type (photo/movie), by folder name, and by file extension (every extension starts checked; uncheck one to hide files your browser can't render).
+- Selected folder names are shown at the top; they are removed from the remaining folder buttons.
+- Items that fail to load can be hidden with a button (placed below the filters).
 - Galleries over 300 items show a warning instead of rendering by default; a button lets you force-show them anyway.
 - The entry point script keeps its window open (pause on exit) and writes its output to `update.log`.
 
@@ -45,4 +47,3 @@ Most browsers can't read `media.json` over `file://`; open the folder over HTTP 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-

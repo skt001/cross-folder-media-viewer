@@ -7,6 +7,8 @@ $ErrorActionPreference = 'Stop'
 try {
     try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+
     $root = $PSScriptRoot
     if (-not $root) { $root = Split-Path -Parent $MyInvocation.MyCommand.Path }
     $outName = 'media.json'
@@ -38,7 +40,9 @@ try {
     $paths = New-Object 'System.Collections.Generic.List[string]'
     $kinds = New-Object 'System.Collections.Generic.List[string]'
     $exts = New-Object 'System.Collections.Generic.List[string]'
-    $skipped = New-Object 'System.Collections.Generic.List[string]'
+    $nDotFolders = 0
+    $skippedLinks = New-Object 'System.Collections.Generic.List[string]'
+    $skippedUnreadable = New-Object 'System.Collections.Generic.List[string]'
     $stack = New-Object 'System.Collections.Generic.Stack[string]'
     $stack.Push($root)
 
@@ -48,7 +52,7 @@ try {
             $files = [System.IO.Directory]::GetFiles($dir)
             $subs = [System.IO.Directory]::GetDirectories($dir)
         } catch {
-            $skipped.Add($dir)
+            $skippedUnreadable.Add($dir)
             continue
         }
 
@@ -68,16 +72,19 @@ try {
 
         foreach ($d in $subs) {
             $dname = [System.IO.Path]::GetFileName($d)
-            if ($dname.StartsWith('.')) { continue } # dot-folders are hidden by convention; not walked
+            if ($dname.StartsWith('.')) {
+                $nDotFolders++
+                continue # dot-folders are hidden by convention; not walked
+            }
             $isLink = $false
             try {
                 $attr = [System.IO.File]::GetAttributes($d)
                 $isLink = (($attr -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
             } catch {
-                $skipped.Add($d)
+                $skippedUnreadable.Add($d)
                 continue
             }
-            if ($isLink) { $skipped.Add($d) } else { $stack.Push($d) }
+            if ($isLink) { $skippedLinks.Add($d) } else { $stack.Push($d) }
         }
     }
 
@@ -129,10 +136,14 @@ try {
 
     $nImg = @($kindArr | Where-Object { $_ -eq 'image' }).Count
     $nVid = @($kindArr | Where-Object { $_ -eq 'video' }).Count
-    Write-Log ("{0} updated: {1} items (images {2}, videos {3})" -f $outName, $pathArr.Length, $nImg, $nVid)
-    if ($skipped.Count -gt 0) {
-        Write-Log ("Skipped {0} folder(s) (unreadable, path too long, or a link that is not followed):" -f $skipped.Count)
-        foreach ($s in $skipped) { Write-Log ("  " + $s) }
+    $sw.Stop()
+    $elapsed = '{0:N2}' -f $sw.Elapsed.TotalSeconds
+    Write-Log ("{0} updated: {1} items (images {2}, videos {3}) in {4}s" -f $outName, $pathArr.Length, $nImg, $nVid, $elapsed)
+
+    if ($nDotFolders -gt 0 -or $skippedLinks.Count -gt 0 -or $skippedUnreadable.Count -gt 0) {
+        Write-Log ("Skipped: dot-folders {0}, links {1}, unreadable {2}" -f $nDotFolders, $skippedLinks.Count, $skippedUnreadable.Count)
+        foreach ($s in $skippedLinks) { Write-Log ("  link: " + $s) }
+        foreach ($s in $skippedUnreadable) { Write-Log ("  unreadable: " + $s) }
     }
 } catch {
     Write-Host ("ERROR: " + $_.Exception.Message)

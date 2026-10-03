@@ -23,7 +23,7 @@
         .replace(/'/g, "&" + "#39;");
     }
 
-    // The index (media.json) is an array of { "path": relative path as-is, "kind": "image" | "video", "ext": extension }.
+    // The index is an array of { "path": relative path as-is, "kind": "image" | "video", "ext": extension }.
     // The viewer only builds HTML from the index; it never checks whether the file actually exists.
     function toItem(entry) {
       if (!entry || typeof entry.path !== "string") return null;
@@ -36,7 +36,7 @@
         const dot = filename.lastIndexOf(".");
         ext = dot > 0 && dot < filename.length - 1 ? filename.slice(dot + 1).toLowerCase() : "";
       }
-      return { path: entry.path, folders: parts.slice(0, -1), filename, ext, kind: entry.kind };
+      return { path: entry.path, folders: parts.slice(0, -1), filename, ext, kind: entry.kind, failed: false };
     }
 
     function parseIndex(data) {
@@ -76,14 +76,16 @@
     // State: the item array plus a few toggles.
     const state = {
       items: null, // null: loading, []: empty data or error, [...]: data loaded
-      error: null, // set when media.json could not be fetched or parsed
+      error: null, // set when the index could not be fetched or parsed
       showImages: true,
       showVideos: true,
       hiddenExts: new Set(), // extensions to hide (e.g. the browser can't render them)
-      forceShow: false // render the gallery even past the 300-item threshold
+      selectedFolders: [], // names that have been used to narrow (display only; filter is destructive)
+      forceShow: false, // render the gallery even past the 300-item threshold
+      hideFailed: false // hide items whose failed flag is set
     };
 
-    // Items after applying the image/video toggle and folder filtering (candidates for the extension checkboxes)
+    // Items after applying the image/video toggle (candidates for the extension checkboxes)
     function typeFilteredItems() {
       if (!state.items) return [];
       return state.items.filter((item) => {
@@ -94,7 +96,11 @@
     }
 
     function filteredItems() {
-      return typeFilteredItems().filter((item) => !state.hiddenExts.has(item.ext));
+      return typeFilteredItems().filter((item) => {
+        if (state.hiddenExts.has(item.ext)) return false;
+        if (state.hideFailed && item.failed) return false;
+        return true;
+      });
     }
 
     function render() {
@@ -106,10 +112,15 @@
       }
 
       const shown = filteredItems();
-      const folders = folderFacets(shown);
+      const allFolders = folderFacets(shown);
+      const folders = allFolders.filter((f) => !state.selectedFolders.includes(f));
       const exts = extFacets(typeFilteredItems());
 
-      const folderButtons = folders.map((f) => 
+      const selectedList = state.selectedFolders.length
+        ? state.selectedFolders.map((f) => `<mark>${esc(f)}</mark>`).join(" ")
+        : "";
+
+      const folderButtons = folders.map((f) =>
         `<button type="button" data-filter-folder="${esc(f)}">${esc(f)}</button>`
       ).join(" ");
 
@@ -128,16 +139,20 @@
           const kindLabel = item.kind === "video" ? "Movie" : "Photo";
           const cap = `<figcaption><mark>${esc(kindLabel)}</mark><mark>${esc(item.ext)}</mark><mark>${esc(item.path)}</mark></figcaption>`;
           const media = item.kind === "video"
-            ? `<video src="${href}#t=1" muted playsinline></video>`
-            : `<img src="${href}" alt="${esc(item.filename)}" loading="lazy">`;
+            ? `<video src="${href}#t=1" muted playsinline data-path="${esc(item.path)}"></video>`
+            : `<img src="${href}" alt="${esc(item.filename)}" loading="lazy" data-path="${esc(item.path)}">`;
           return `<figure><a href="${href}" target="_blank" rel="noopener noreferrer">${media}</a>${cap}</figure>`;
         }).join("");
       } else if (state.error) {
-        bodyContent = `<p><strong>Could not load media.json: ${esc(state.error)}</strong></p>
-          <p><small>Check that media.json exists next to view.html, and that you're viewing this page over http(s) rather than file://.</small></p>`;
+        bodyContent = `<p><strong>Could not load the media list: ${esc(state.error)}</strong></p>
+          <p><small>Ask the administrator to run the update script, and open this page over http(s) rather than file://.</small></p>`;
       } else {
         bodyContent = `<p>No matching files.</p>`;
       }
+
+      const hideFailedBtn = (!state.hideFailed && shown.length > 0)
+        ? `<p><button type="button" data-hide-failed>Hide failed</button></p>`
+        : "";
 
       app.innerHTML = `
         <header>
@@ -147,6 +162,7 @@
             <label><input type="checkbox" data-type-toggle="video" ${state.showVideos ? "checked" : ""}> Movie</label>
             <button type="button" data-reset>Reset</button>
           </div>
+          ${selectedList ? `<div><small>Selected:</small> ${selectedList}</div>` : ""}
           <hr>
           <div>
             ${folderButtons.length ? folderButtons : "<small>No more folders to filter by</small>"}
@@ -156,16 +172,30 @@
           </div>
         </header>
         <main>
+          ${hideFailedBtn}
           ${bodyContent}
         </main>`;
+
+      // Attach error handlers. Only set the in-memory failed flag; do not re-render here.
+      app.querySelectorAll("img[data-path], video[data-path]").forEach((el) => {
+        el.addEventListener("error", () => {
+          const path = el.dataset.path;
+          if (!path || !state.items) return;
+          const item = state.items.find((i) => i.path === path);
+          if (item) item.failed = true;
+        }, { once: true });
+      });
     }
 
     document.getElementById("app").addEventListener("click", (e) => {
       const folderBtn = e.target.closest("[data-filter-folder]");
       if (folderBtn) {
         const targetFolder = folderBtn.dataset.filterFolder;
-        // Narrow state.items down to this folder's subset.
+        // Narrow state.items down to this folder's subset (destructive).
         state.items = state.items.filter((item) => item.folders.includes(targetFolder));
+        if (!state.selectedFolders.includes(targetFolder)) {
+          state.selectedFolders.push(targetFolder);
+        }
         render();
         window.scrollTo(0, 0);
         return;
@@ -180,6 +210,13 @@
       const forceShowBtn = e.target.closest("[data-force-show]");
       if (forceShowBtn) {
         state.forceShow = true;
+        render();
+        return;
+      }
+
+      const hideFailedBtn = e.target.closest("[data-hide-failed]");
+      if (hideFailedBtn) {
+        state.hideFailed = true;
         render();
       }
     });
@@ -203,6 +240,9 @@
     async function boot() {
       state.items = null;
       state.error = null;
+      state.selectedFolders = [];
+      state.forceShow = false;
+      state.hideFailed = false;
       render();
       try {
         const res = await fetch("media.json", { cache: "no-store" });
