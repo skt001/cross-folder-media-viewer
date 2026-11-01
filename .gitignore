@@ -1,0 +1,13 @@
+# Generated media index may contain private file and folder names.
+/media.json
+/media.json.tmp
+/update.log
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
